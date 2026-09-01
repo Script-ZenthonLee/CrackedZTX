@@ -1,0 +1,466 @@
+-- Services & Core Variables
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- UI Library Loading
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+
+local Window = Rayfield:CreateWindow({
+    Name = "Speed Legends V1 | " .. LocalPlayer.Name,
+    LoadingTitle = "Loading Speed Legends...",
+    LoadingSubtitle = "Rayfield UI",
+    ConfigurationSaving = { Enabled = false }
+})
+
+-- UI Tabs
+local FarmTab = Window:CreateTab("Farm", 4483362458)
+local MiscTab = Window:CreateTab("Misc", 4483362458)
+local PetsTab = Window:CreateTab("Pets", 4483362458)
+local ShopTab = Window:CreateTab("Shop", 4483362458)
+local CreditsTab = Window:CreateTab("Credits", 4483362458)
+
+-- Character & Remote References
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+
+LocalPlayer.CharacterAdded:Connect(function(newChar)
+    Character = newChar
+    HumanoidRootPart = newChar:WaitForChild("HumanoidRootPart")
+end)
+
+local REvents = ReplicatedStorage:WaitForChild("rEvents")
+local OrbEvent = REvents:WaitForChild("orbEvent")
+local RebirthEvent = REvents:WaitForChild("rebirthEvent")
+local OpenCrystalRemote = REvents:WaitForChild("openCrystalRemote")
+local SellPetEvent = REvents:WaitForChild("sellPetEvent")
+local FreeGiftClaimRemote = REvents:FindFirstChild("freeGiftClaimRemote")
+local RaceEvent = REvents:FindFirstChild("raceEvent")
+
+-- State Tables
+local ToggleStates = {
+    FarmOrb = false,
+    FarmFastOrb = false,
+    FarmOrbs = false,
+    AutoRebirth = false,
+    AutoFarmGems = false,
+    AutoJoinRace = false,
+    AutoHoopsPull = false,
+    AutoDelete = false,
+    AutoDeleteSequence = false,
+    CrystalStates = {},
+}
+
+local TimerSettings = {
+    FarmOrb_Timer = 0.1,
+    FarmFastOrb_Timer = 0,
+    FarmOrbs_Timer = 0.1,
+    AutoRebirth_Timer = 1,
+    AutoBuyPets_Timer = 1,
+}
+
+-- Utility Functions
+local function GetTargetPart(target)
+    if not target then return nil end
+    if target:IsA("BasePart") then
+        return target
+    elseif target:IsA("Model") then
+        return target.PrimaryPart or target:FindFirstChildWhichIsA("BasePart", true)
+    else
+        return target:FindFirstChildWhichIsA("BasePart", true)
+    end
+end
+
+local function TeleportToTarget(target)
+    local part = GetTargetPart(target)
+    if part and HumanoidRootPart then
+        HumanoidRootPart.CFrame = part.CFrame + Vector3.new(0, 3, 0)
+    end
+end
+
+-- ==================== FARM TAB ====================
+
+local SelectedOrb = "Red Orb"
+local OrbList = { "Red Orb", "Orange Orb", "Blue Orb", "Yellow Orb", "Gem" }
+
+FarmTab:CreateDropdown({
+    Name = "Select Orb",
+    Options = OrbList,
+    CurrentOption = SelectedOrb,
+    Flag = "OrbSelect",
+    Callback = function(value) SelectedOrb = value end,
+})
+
+FarmTab:CreateSlider({
+    Name = "Orb Farm Timer",
+    Range = { 0, 1 },
+    Increment = 0.01,
+    Suffix = "s",
+    CurrentValue = TimerSettings.FarmOrb_Timer,
+    Flag = "OrbTimer",
+    Callback = function(value)
+        TimerSettings.FarmOrb_Timer = value
+        TimerSettings.FarmOrbs_Timer = value
+    end,
+})
+
+-- Farm Loops
+FarmTab:CreateToggle({
+    Name = "Auto Orb (Selected)",
+    CurrentValue = false,
+    Flag = "AutoOrb",
+    Callback = function(state)
+        ToggleStates.FarmOrb = state
+        if state then
+            task.spawn(function()
+                while ToggleStates.FarmOrb do
+                    OrbEvent:FireServer("collectOrb", SelectedOrb, "City")
+                    task.wait(TimerSettings.FarmOrb_Timer)
+                end
+            end)
+        end
+    end,
+})
+
+FarmTab:CreateToggle({
+    Name = "Auto Orb (Fast)",
+    CurrentValue = false,
+    Flag = "AutoOrbFast",
+    Callback = function(state)
+        ToggleStates.FarmFastOrb = state
+        if state then
+            task.spawn(function()
+                while ToggleStates.FarmFastOrb do
+                    for i = 1, 10 do
+                        task.spawn(function()
+                            if ToggleStates.FarmFastOrb then
+                                OrbEvent:FireServer("collectOrb", SelectedOrb, "City")
+                            end
+                        end)
+                    end
+                    task.wait(TimerSettings.FarmFastOrb_Timer)
+                end
+            end)
+        end
+    end,
+})
+
+FarmTab:CreateToggle({
+    Name = "Auto Orbs (All)",
+    CurrentValue = false,
+    Flag = "AutoOrbsAll",
+    Callback = function(state)
+        ToggleStates.FarmOrbs = state
+        if state then
+            task.spawn(function()
+                while ToggleStates.FarmOrbs do
+                    for _, orbName in ipairs(OrbList) do
+                        OrbEvent:FireServer("collectOrb", orbName, "City")
+                        task.wait(TimerSettings.FarmOrbs_Timer)
+                    end
+                end
+            end)
+        end
+    end,
+})
+
+FarmTab:CreateToggle({
+    Name = "Auto Rebirth",
+    CurrentValue = false,
+    Flag = "AutoRebirth",
+    Callback = function(state)
+        ToggleStates.AutoRebirth = state
+        if state then
+            task.spawn(function()
+                while ToggleStates.AutoRebirth do
+                    RebirthEvent:FireServer("rebirthRequest")
+                    task.wait(TimerSettings.AutoRebirth_Timer)
+                end
+            end)
+        end
+    end,
+})
+
+FarmTab:CreateToggle({
+    Name = "Auto Hoops (Pull All Hoops To You)",
+    CurrentValue = false,
+    Flag = "AutoHoopsPull",
+    Callback = function(state)
+        ToggleStates.AutoHoopsPull = state
+        if state then
+            task.spawn(function()
+                local hoops = workspace:WaitForChild("Hoops")
+                while ToggleStates.AutoHoopsPull do
+                    local char = LocalPlayer.Character
+                    if char and char:FindFirstChild("Head") then
+                        for _, hoop in ipairs(hoops:GetChildren()) do
+                            hoop.CFrame = char.Head.CFrame
+                        end
+                        task.wait(0.4)
+                        for _, hoop in ipairs(hoops:GetChildren()) do
+                            hoop.Position = Vector3.new(0, 0, 0)
+                        end
+                    end
+                    task.wait(0.6)
+                end
+            end)
+        end
+    end,
+})
+
+FarmTab:CreateToggle({
+    Name = "Auto Farm Gems (Tp to All Gems)",
+    CurrentValue = false,
+    Flag = "AutoGems",
+    Callback = function(state)
+        ToggleStates.AutoFarmGems = state
+        if state then
+            task.spawn(function()
+                while ToggleStates.AutoFarmGems do
+                    local orbFolder = workspace:FindFirstChild("orbFolder")
+                    local city = orbFolder and orbFolder:FindFirstChild("City")
+                    if city then
+                        for _, gem in ipairs(city:GetChildren()) do
+                            if gem.Name:lower():find("gem") then
+                                TeleportToTarget(gem)
+                                task.wait(0.01)
+                            end
+                        end
+                    end
+                    task.wait(0.1)
+                end
+            end)
+        end
+    end,
+})
+
+FarmTab:CreateToggle({
+    Name = "Auto Join Race",
+    CurrentValue = false,
+    Flag = "AutoJoinRace",
+    Callback = function(state)
+        ToggleStates.AutoJoinRace = state
+        if state then
+            task.spawn(function()
+                while ToggleStates.AutoJoinRace do
+                    if RaceEvent then
+                        pcall(function() RaceEvent:FireServer("joinRace") end)
+                    end
+                    task.wait(1)
+                end
+            end)
+        end
+    end,
+})
+
+local RaceFinishParts = {
+    workspace.raceMaps.Desert.finishPart, 
+    workspace.raceMaps.Magma.finishPart,
+    workspace.raceMaps.Grassland.finishPart,
+}
+
+FarmTab:CreateToggle({
+    Name = "Auto Win Race",
+    CurrentValue = false,
+    Flag = "AutoRace",
+    Callback = function(state)
+        _G.autoRace = state
+        if state then
+            task.spawn(function()
+                while _G.autoRace do
+                    for _, finishPart in ipairs(RaceFinishParts) do
+                        TeleportToTarget(finishPart)
+                        task.wait(0.1)
+                    end
+                end
+            end)
+        end
+    end,
+})
+
+-- ==================== MISC TAB ====================
+
+MiscTab:CreateButton({
+    Name = "Claim All Free Gifts",
+    Callback = function()
+        if FreeGiftClaimRemote then
+            for i = 1, 8 do
+                pcall(function() FreeGiftClaimRemote:InvokeServer("claimGift", i) end)
+                task.wait(0.2)
+            end
+        end
+    end,
+})
+
+MiscTab:CreateButton({
+    Name = "Redeem Codes",
+    Callback = function()
+        local codeRemote = REvents:FindFirstChild("codeRemote")
+        if codeRemote then
+            local codes = {
+                "sparkles300", "speedchampion1000", "swiftjungle1000", 
+                "legends500", "jungleracer5000", "junglesecrets7500", 
+                "SPRINT250", "hyper250", "racer300", "Launch200"
+            }
+            for _, code in ipairs(codes) do
+                pcall(function() codeRemote:InvokeServer(code) end)
+            end
+        end
+    end,
+})
+
+-- ==================== SHOP TAB ====================
+
+local CrystalsList = {
+    "Jungle Crystal", "Yellow Crystal", "Snow Crystal", "Red Crystal [300]", "Purple Crystal",
+    "Lightning Crystal", "Lava Crystal", "Inferno Crystal", "Electro Legends Crystal", "Blue Crystal",
+}
+
+ShopTab:CreateSlider({
+    Name = "Auto Buy Delay",
+    Range = { 0.01, 1 },
+    Increment = 0.01,
+    Suffix = "s",
+    CurrentValue = TimerSettings.AutoBuyPets_Timer,
+    Flag = "BuyDelay",
+    Callback = function(value) TimerSettings.AutoBuyPets_Timer = value end,
+})
+
+task.spawn(function()
+    while true do
+        for _, crystalName in ipairs(CrystalsList) do
+            if ToggleStates.CrystalStates[crystalName] then
+                OpenCrystalRemote:InvokeServer("openCrystal", crystalName)
+                task.wait(TimerSettings.AutoBuyPets_Timer)
+            end
+        end
+        task.wait(1)
+    end
+end)
+
+for _, crystalName in ipairs(CrystalsList) do
+    ToggleStates.CrystalStates[crystalName] = false
+    ShopTab:CreateToggle({
+        Name = "Auto Buy " .. crystalName,
+        CurrentValue = false,
+        Flag = "Buy_" .. crystalName,
+        Callback = function(state) ToggleStates.CrystalStates[crystalName] = state end,
+    })
+end
+
+-- ==================== PETS TAB ====================
+
+local PetsFolder = LocalPlayer:WaitForChild("petsFolder")
+local RarityList = { "Basic", "Advanced", "Rare", "Epic", "Unique", "Omega" }
+local SelectedRarity = "Basic"
+
+PetsTab:CreateDropdown({
+    Name = "Select Rarity",
+    Options = RarityList,
+    CurrentOption = SelectedRarity,
+    Flag = "RaritySelect",
+    Callback = function(value) SelectedRarity = value end,
+})
+
+local function SellSpecificPet(action, petName, rarityFolder)
+    local rarityDir = PetsFolder:FindFirstChild(rarityFolder)
+    if not rarityDir then return end
+    local petObj = rarityDir:FindFirstChild(petName)
+    if petObj then
+        SellPetEvent:FireServer(action, petObj)
+    end
+end
+
+local function HandleAutoDelete(rarity, useSequence)
+    task.spawn(function()
+        while (useSequence and ToggleStates.AutoDeleteSequence) or (not useSequence and ToggleStates.AutoDelete) do
+            local targetRarities = {}
+
+            if useSequence then
+                local maxIndex = nil
+                for i, r in ipairs(RarityList) do
+                    if r == rarity then
+                        maxIndex = i
+                        break
+                    end
+                end
+                if maxIndex then
+                    for i = 1, maxIndex do
+                        table.insert(targetRarities, RarityList[i])
+                    end
+                end
+            else
+                table.insert(targetRarities, rarity)
+            end
+
+            for _, currentRarity in ipairs(targetRarities) do
+                local rarityDir = PetsFolder:FindFirstChild(currentRarity)
+                if rarityDir then
+                    local petsToSell = {}
+                    for _, child in ipairs(rarityDir:GetChildren()) do
+                        if child:IsA("StringValue") then
+                            table.insert(petsToSell, child)
+                        end
+                    end
+
+                    for _, petChild in ipairs(petsToSell) do
+                        if petChild.Parent then
+                            SellSpecificPet("sellPet", petChild.Name, currentRarity)
+                            task.wait(0.3)
+                        end
+                    end
+                end
+                task.wait(0.8)
+            end
+            task.wait(1.5)
+        end
+    end)
+end
+
+PetsTab:CreateToggle({
+    Name = "Auto Delete (Selected Rarity)",
+    CurrentValue = false,
+    Flag = "AutoDeleteSelected",
+    Callback = function(state)
+        ToggleStates.AutoDelete = state
+        if state then HandleAutoDelete(SelectedRarity, false) end
+    end,
+})
+
+PetsTab:CreateToggle({
+    Name = "Auto Delete (Selected + Sequence)",
+    CurrentValue = false,
+    Flag = "AutoDeleteSequence",
+    Callback = function(state)
+        ToggleStates.AutoDeleteSequence = state
+        if state then HandleAutoDelete(SelectedRarity, true) end
+    end,
+})
+
+-- ==================== CREDITS TAB ====================
+
+CreditsTab:CreateButton({
+    Name = "Copy YouTube Channel Link",
+    Callback = function()
+        setclipboard("https://www.youtube.com/@meksboks/")
+        Rayfield:Notify({
+            Title = "Copied Buddy!",
+            Content = "Channel: @meksboks",
+            Duration = 5,
+            Image = 5597737428,
+        })
+    end,
+})
+
+CreditsTab:CreateButton({
+    Name = "Copy My Roblox Acc Link",
+    Callback = function()
+        setclipboard("https://www.roblox.com/users/5553114047/profile")
+        Rayfield:Notify({
+            Title = "Copied Buddy!",
+            Content = "User - iogjigj",
+            Duration = 5,
+            Image = 18919165394,
+        })
+    end,
+})
