@@ -7,7 +7,7 @@ local LocalPlayer = Players.LocalPlayer
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
 local Window = Rayfield:CreateWindow({
-    Name = "Speed Legends V1 - Cracked By Kenzou | " .. LocalPlayer.Name,
+    Name = "Speed Legends V1 - Deob By Kenzou | Wala kang bitaw " .. LocalPlayer.DisplayName,
     LoadingTitle = "Loading Speed Legends...",
     LoadingSubtitle = "Rayfield UI",
     ConfigurationSaving = { Enabled = false }
